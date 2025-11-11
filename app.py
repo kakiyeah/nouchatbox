@@ -7,12 +7,24 @@ import os
 import requests
 
 # Hugging Face Inference APIの設定
-# 如果默认模型不可用，可以尝试其他模型：
-# - elyza/ELYZA-japanese-Llama-2-7b-fast-instruct
-# - cyberagent/calm2-7b-chat
-# - meta-llama/Llama-2-7b-chat-hf (需要认证)
+# 可以尝试的模型列表（按优先级排序）：
+# 1. elyza/ELYZA-japanese-Llama-2-7b-fast-instruct (日语优化，快速)
+# 2. elyza/ELYZA-japanese-Llama-2-7b-instruct (日语优化)
+# 3. cyberagent/calm2-7b-chat (日语，轻量)
+# 4. mistralai/Mistral-7B-Instruct-v0.2 (多语言，需要调整提示词)
+# 5. meta-llama/Llama-2-7b-chat-hf (需要认证token)
+
+# 默认使用第一个模型，可以通过环境变量覆盖
 HF_API_URL = os.getenv("HF_API_URL", "https://api-inference.huggingface.co/models/elyza/ELYZA-japanese-Llama-2-7b-fast-instruct")
 HF_API_TOKEN = os.getenv("HF_API_TOKEN", "")
+
+# 如果主模型失败，尝试的备用模型列表
+BACKUP_MODELS = [
+    "https://api-inference.huggingface.co/models/elyza/ELYZA-japanese-Llama-2-7b-instruct",
+    "https://api-inference.huggingface.co/models/cyberagent/calm2-7b-chat",
+    "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2",
+    "https://api-inference.huggingface.co/models/google/flan-t5-large",  # 备选，虽然不支持日语但可以测试
+]
 
 # 优化的System Prompt
 SYSTEM_PROMPT = """あなたは農業推進事業者です。農家さんの質問や懸念に対して、共感的で具体的な回答をしてください。
@@ -87,15 +99,8 @@ def generate_response(message, history):
     if HF_API_TOKEN:
         headers["Authorization"] = f"Bearer {HF_API_TOKEN}"
     
-    # 备用模型列表（如果主模型不可用）
-    backup_models = [
-        "https://api-inference.huggingface.co/models/elyza/ELYZA-japanese-Llama-2-7b-fast-instruct",
-        "https://api-inference.huggingface.co/models/cyberagent/calm2-7b-chat",
-        "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2",
-    ]
-    
     # 尝试主模型和备用模型
-    models_to_try = [HF_API_URL] + backup_models
+    models_to_try = [HF_API_URL] + BACKUP_MODELS
     
     for model_url in models_to_try:
         payload = {
@@ -113,7 +118,8 @@ def generate_response(message, history):
         }
         
         try:
-            response = requests.post(model_url, headers=headers, json=payload, timeout=60)
+            # 增加超时时间，给模型更多时间响应
+            response = requests.post(model_url, headers=headers, json=payload, timeout=120)
             
             # 如果成功，返回结果
             if response.status_code == 200:
@@ -141,14 +147,29 @@ def generate_response(message, history):
             elif response.status_code == 503:
                 error_info = response.json() if response.content else {}
                 estimated_time = error_info.get("estimated_time", 30)
-                return f"モデルを読み込み中です。約{estimated_time}秒お待ちください。しばらくしてから再度お試しください。"
+                # 如果是第一个模型，返回等待信息；否则尝试下一个
+                if model_url == models_to_try[0]:
+                    return f"モデルを読み込み中です。約{estimated_time}秒お待ちください。しばらくしてから再度お試しください。"
+                else:
+                    continue  # 尝试下一个模型
             
-            # 如果是410（Gone），尝试下一个模型
-            elif response.status_code == 410:
+            # 如果是410（Gone）或404（Not Found），尝试下一个模型
+            elif response.status_code in [410, 404]:
                 continue  # 尝试下一个模型
+            
+            # 如果是401（Unauthorized），需要token
+            elif response.status_code == 401:
+                if not HF_API_TOKEN:
+                    # 如果没有token，尝试下一个模型
+                    continue
+                else:
+                    # 如果有token但还是401，可能是token无效
+                    continue
             
             # 其他错误，尝试下一个模型
             else:
+                # 记录错误但继续尝试
+                print(f"Model {model_url} returned status {response.status_code}")
                 continue
                 
         except requests.exceptions.Timeout:

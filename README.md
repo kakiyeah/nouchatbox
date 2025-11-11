@@ -1,5 +1,5 @@
 ---
-title: 農業相談チャットボット
+title: Agriculture Consultation Chatbot
 emoji: 🌾
 colorFrom: green
 colorTo: yellow
@@ -9,77 +9,102 @@ app_file: app.py
 pinned: false
 ---
 
-# 🌾 農業相談チャットボット
+# 🌾 Agriculture Consultation Chatbot
 
-農家さん向けの親しみやすく分かりやすい農業相談チャットボットです。DPO（Direct Preference Optimization）データセットに基づいて設計された、農家さんが理解しやすい回答スタイルを実現しています。
+A friendly and easy-to-understand agricultural consultation chatbot designed for farmers. This chatbot uses prompt engineering to generate responses in a farmer-friendly style, based on DPO (Direct Preference Optimization) dataset principles.
 
-## 特徴
+## Features
 
-- **親しみやすい口語体**: 農家さんが親しみを感じられる話し方
-- **共感的な対応**: 農家さんの気持ちに寄り添う回答
-- **具体的な例**: 実際の経験や事例を交えた説明
-- **分かりやすい表現**: 専門用語を避け、日常的な言葉で説明
+- **Friendly Conversational Style**: Uses casual, approachable language that farmers can relate to
+- **Empathetic Responses**: Shows understanding and empathy for farmers' concerns
+- **Concrete Examples**: Includes real experiences and practical examples
+- **Clear Expressions**: Avoids technical jargon and uses everyday language
 
-## 使用方法
+## How It Works
 
-### Hugging Face Spaceでの使用
+This chatbot uses prompt engineering to guide language models to generate responses in a farmer-friendly style. Instead of fine-tuning models, it leverages carefully crafted system prompts that instruct the model to:
 
-1. このリポジトリをHugging Face Spaceにアップロード
-2. Spaceの設定で以下を指定：
-   - **SDK**: Gradio
-   - **Hardware**: CPU（小規模モデル）または GPU（大規模モデル）
-   - **Environment variables**: 
-     - `MODEL_NAME`: 使用するモデル名（例: `elyza/ELYZA-japanese-Llama-2-7b-instruct`）
+- Use casual, friendly language (e.g., "おじさん", "だよね", "俺")
+- Show empathy and understanding (e.g., "そうだよね", "心配だよね", "分かる分かる")
+- Provide concrete examples (e.g., "去年参加した○○さん", "実際にやってみると")
+- Avoid technical terms and statistical data
+- Offer flexible solutions without being pushy
 
-### ローカルでの実行
+## Usage
+
+### Using on Hugging Face Space
+
+1. Visit the [Hugging Face Space](https://huggingface.co/spaces/ryusenyeah/nouchatbox)
+2. Start chatting with the bot
+3. Ask questions about agriculture in Japanese
+
+### Running Locally
 
 ```bash
-# 依存関係のインストール
+# Install dependencies
 pip install -r requirements.txt
 
-# アプリの起動
+# Run the application
 python app.py
 ```
 
-ブラウザで `http://localhost:7860` にアクセスしてください。
+Access the application at `http://localhost:7860` in your browser.
 
-## モデルの選択
+## Model Selection
 
-デフォルトでは `elyza/ELYZA-japanese-Llama-2-7b-instruct` を使用しますが、以下のような日本語対応モデルも使用可能です：
+The chatbot uses Hugging Face Inference API with automatic fallback to multiple models:
 
-- `elyza/ELYZA-japanese-Llama-2-7b-instruct`
-- `elyza/ELYZA-japanese-Llama-2-7b-fast-instruct`
-- `cyberagent/calm2-7b-chat`
-- その他の日本語LLM
+- Primary: `elyza/ELYZA-japanese-Llama-2-7b-fast-instruct`
+- Backup models are automatically tried if the primary model is unavailable
 
-環境変数 `MODEL_NAME` で変更できます。
+You can configure the model by setting the `HF_API_URL` environment variable.
 
-## 回答スタイル
+## Response Style
 
-このチャットボットは、以下の特徴を持つ回答を生成します：
+The chatbot generates responses with the following characteristics:
 
-✅ **推奨される表現**:
-- 「そうだよね」「心配だよね」などの共感的な表現
-- 「実際にやってみると」「去年のデータ見ても」などの具体例
-- 「一緒にやってみようよ」「相談しようね」などの親しみやすい表現
-- 「大丈夫だよ」「安心して」などの安心感を与える言葉
+✅ **Recommended Expressions**:
+- Empathetic phrases like "そうだよね", "心配だよね"
+- Concrete examples like "実際にやってみると", "去年のデータ見ても"
+- Friendly expressions like "一緒にやってみようよ", "相談しようね"
+- Reassuring words like "大丈夫だよ", "安心して"
 
-❌ **避ける表現**:
-- 「統計的に見て」「データによれば」などの専門的表現
-- 「推奨いたします」「必要となります」などの硬い敬語
-- 数値やパーセンテージを多用する説明
+❌ **Avoided Expressions**:
+- Technical terms like "統計的に見て", "データによれば"
+- Formal honorifics like "推奨いたします", "必要となります"
+- Excessive use of numbers and percentages
 
-## カスタマイズ
+## Customization
 
-`app.py` の `SYSTEM_PROMPT` を編集することで、回答スタイルをカスタマイズできます。
+You can customize the response style by editing the `SYSTEM_PROMPT` variable in `app.py`.
 
-## ライセンス
+## API Configuration
 
-このプロジェクトは、元のDPOデータセットのライセンスに従います。
+To improve API reliability and access more models:
 
-## 注意事項
+1. Create a Hugging Face Access Token at https://huggingface.co/settings/tokens
+2. Add it as an environment variable `HF_API_TOKEN` in your Space settings
+3. See `API_SETUP.md` for detailed instructions
 
-- このチャットボットは農業相談の補助ツールとして設計されています
-- 重要な判断は、必ず専門家やJA（農業協同組合）に相談してください
-- モデルの回答は参考情報として扱い、実際の農業作業では慎重に判断してください
+## Architecture
 
+- **Primary Method**: Hugging Face Inference API (lightweight, fast startup)
+- **Fallback System**: If all APIs fail, uses keyword-based responses that match the desired style
+- **Multi-Model Support**: Automatically tries multiple models for better reliability
+
+## License
+
+This project follows the license of the original DPO dataset.
+
+## Important Notes
+
+- This chatbot is designed as an auxiliary tool for agricultural consultation
+- For important decisions, always consult with experts or agricultural cooperatives (JA)
+- Treat model responses as reference information and make careful judgments in actual agricultural work
+
+## Technical Details
+
+- Built with Gradio for the user interface
+- Uses Hugging Face Inference API for model inference
+- Implements automatic model fallback for high availability
+- Includes a fallback response system for when APIs are unavailable

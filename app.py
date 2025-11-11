@@ -1,32 +1,17 @@
-"""
-Hugging Face Inference APIを使用する軽量版
-このバージョンはモデルをローカルにダウンロードせず、Hugging FaceのInference APIを使用します
-"""
 import gradio as gr
 import os
 import requests
 
-# Hugging Face Inference APIの設定
-# 可以尝试的模型列表（按优先级排序）：
-# 1. elyza/ELYZA-japanese-Llama-2-7b-fast-instruct (日语优化，快速)
-# 2. elyza/ELYZA-japanese-Llama-2-7b-instruct (日语优化)
-# 3. cyberagent/calm2-7b-chat (日语，轻量)
-# 4. mistralai/Mistral-7B-Instruct-v0.2 (多语言，需要调整提示词)
-# 5. meta-llama/Llama-2-7b-chat-hf (需要认证token)
-
-# 默认使用第一个模型，可以通过环境变量覆盖
 HF_API_URL = os.getenv("HF_API_URL", "https://api-inference.huggingface.co/models/elyza/ELYZA-japanese-Llama-2-7b-fast-instruct")
 HF_API_TOKEN = os.getenv("HF_API_TOKEN", "")
 
-# 如果主模型失败，尝试的备用模型列表
 BACKUP_MODELS = [
     "https://api-inference.huggingface.co/models/elyza/ELYZA-japanese-Llama-2-7b-instruct",
     "https://api-inference.huggingface.co/models/cyberagent/calm2-7b-chat",
     "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2",
-    "https://api-inference.huggingface.co/models/google/flan-t5-large",  # 备选，虽然不支持日语但可以测试
+    "https://api-inference.huggingface.co/models/google/flan-t5-large",
 ]
 
-# 优化的System Prompt
 SYSTEM_PROMPT = """あなたは農業推進事業者です。農家さんの質問や懸念に対して、共感的で具体的な回答をしてください。
 
 回答のスタイル：
@@ -50,11 +35,8 @@ SYSTEM_PROMPT = """あなたは農業推進事業者です。農家さんの質�
 - 「大丈夫だよ」「安心して」などの安心感を与える言葉"""
 
 def generate_fallback_response(message):
-    """当API不可用时，生成符合风格的fallback回答"""
-    # 基于用户问题中的关键词，生成符合风格的回答
     message_lower = message.lower()
     
-    # 检测常见问题类型并生成相应回答
     if "リスク" in message or "心配" in message or "不安" in message:
         return "そうだよね、その心配はよく分かるよ。実際にやってみると、最初は不安かもしれないけど、段階的に進めていけば大丈夫だと思うんだ。例えば、一部の田んぼでまず試してみて、効果を自分の目で確かめてから広げるっていう方法もあるよ。一緒に相談しながら進めていこうね。"
     
@@ -71,11 +53,9 @@ def generate_fallback_response(message):
         return "そうだよね、いくら環境に良くても、米が売れなきゃ本末転倒だ。だから今回は、品質を絶対に落とさないってのが大前提なんだ。実は既に参加してる農家さん、去年と同じ等級で出荷できてるし、むしろJAから『環境配慮米』って名前で少し高く買ってもらえたって言ってた。おじさんも直販やってるなら、これを売りにできるかもしれないよ。"
     
     else:
-        # 通用回答
         return "そうだよね、その心配はよく分かるよ。実際にやってみると、最初は不安かもしれないけど、段階的に進めていけば大丈夫だと思うんだ。例えば、一部の田んぼでまず試してみて、効果を自分の目で確かめてから広げるっていう方法もあるよ。一緒に相談しながら進めていこうね。何か具体的な質問があったら、遠慮なく聞いてくれよ。"
     
 def format_prompt(user_message, history=None):
-    """格式化提示词"""
     conversation = ""
     if history:
         for user_msg, assistant_msg in history:
@@ -92,14 +72,12 @@ def format_prompt(user_message, history=None):
     return prompt
 
 def generate_response(message, history):
-    """使用Hugging Face Inference API生成回答"""
     prompt = format_prompt(message, history)
     
     headers = {}
     if HF_API_TOKEN:
         headers["Authorization"] = f"Bearer {HF_API_TOKEN}"
     
-    # 尝试主模型和备用模型
     models_to_try = [HF_API_URL] + BACKUP_MODELS
     
     for model_url in models_to_try:
@@ -118,18 +96,14 @@ def generate_response(message, history):
         }
         
         try:
-            # 增加超时时间，给模型更多时间响应
             response = requests.post(model_url, headers=headers, json=payload, timeout=120)
             
-            # 如果成功，返回结果
             if response.status_code == 200:
                 result = response.json()
                 
                 if isinstance(result, list) and len(result) > 0:
                     generated_text = result[0].get("generated_text", "")
-                    # 清理回答
                     generated_text = generated_text.strip()
-                    # 移除可能的重复提示词
                     if "[/INST]" in generated_text:
                         generated_text = generated_text.split("[/INST]")[-1].strip()
                     if "<s>" in generated_text:
@@ -141,48 +115,38 @@ def generate_response(message, history):
                         generated_text = generated_text.split("[/INST]")[-1].strip()
                     return generated_text
                 else:
-                    continue  # 尝试下一个模型
+                    continue
             
-            # 如果是503（模型正在加载），等待并重试
             elif response.status_code == 503:
                 error_info = response.json() if response.content else {}
                 estimated_time = error_info.get("estimated_time", 30)
-                # 如果是第一个模型，返回等待信息；否则尝试下一个
                 if model_url == models_to_try[0]:
                     return f"モデルを読み込み中です。約{estimated_time}秒お待ちください。しばらくしてから再度お試しください。"
                 else:
-                    continue  # 尝试下一个模型
+                    continue
             
-            # 如果是410（Gone）或404（Not Found），尝试下一个模型
             elif response.status_code in [410, 404]:
-                continue  # 尝试下一个模型
+                continue
             
-            # 如果是401（Unauthorized），需要token
             elif response.status_code == 401:
                 if not HF_API_TOKEN:
-                    # 如果没有token，尝试下一个模型
                     continue
                 else:
-                    # 如果有token但还是401，可能是token无效
                     continue
             
-            # 其他错误，尝试下一个模型
             else:
-                # 记录错误但继续尝试
                 print(f"Model {model_url} returned status {response.status_code}")
                 continue
                 
         except requests.exceptions.Timeout:
-            continue  # 超时，尝试下一个模型
+            continue
         except requests.exceptions.RequestException:
-            continue  # 请求错误，尝试下一个模型
+            continue
         except Exception:
-            continue  # 其他错误，尝试下一个模型
+            continue
     
-    # 所有模型都失败，使用fallback回答（基于提示词风格）
     return generate_fallback_response(message)
 
-# 创建Gradio界面
 def create_interface():
     with gr.Blocks(title="農業相談チャットボット", theme=gr.themes.Soft()) as demo:
         gr.Markdown("""
@@ -212,7 +176,6 @@ def create_interface():
         with gr.Row():
             clear_btn = gr.Button("会話をクリア", variant="secondary")
         
-        # 示例问题
         gr.Markdown("### 💡 質問例")
         examples = gr.Examples(
             examples=[
@@ -225,7 +188,6 @@ def create_interface():
             label="クリックして試してみてください"
         )
         
-        # 事件处理
         def user(user_message, history):
             return "", history + [[user_message, None]]
         

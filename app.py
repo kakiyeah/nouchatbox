@@ -7,7 +7,11 @@ import os
 import requests
 
 # Hugging Face Inference APIの設定
-HF_API_URL = os.getenv("HF_API_URL", "https://api-inference.huggingface.co/models/elyza/ELYZA-japanese-Llama-2-7b-instruct")
+# 如果默认模型不可用，可以尝试其他模型：
+# - elyza/ELYZA-japanese-Llama-2-7b-fast-instruct
+# - cyberagent/calm2-7b-chat
+# - meta-llama/Llama-2-7b-chat-hf (需要认证)
+HF_API_URL = os.getenv("HF_API_URL", "https://api-inference.huggingface.co/models/elyza/ELYZA-japanese-Llama-2-7b-fast-instruct")
 HF_API_TOKEN = os.getenv("HF_API_TOKEN", "")
 
 # 优化的System Prompt
@@ -58,41 +62,79 @@ def generate_response(message, history):
     if HF_API_TOKEN:
         headers["Authorization"] = f"Bearer {HF_API_TOKEN}"
     
-    payload = {
-        "inputs": prompt,
-        "parameters": {
-            "max_new_tokens": 512,
-            "temperature": 0.7,
-            "top_p": 0.9,
-            "do_sample": True,
-            "return_full_text": False,
-        },
-        "options": {
-            "wait_for_model": True
+    # 备用模型列表（如果主模型不可用）
+    backup_models = [
+        "https://api-inference.huggingface.co/models/elyza/ELYZA-japanese-Llama-2-7b-fast-instruct",
+        "https://api-inference.huggingface.co/models/cyberagent/calm2-7b-chat",
+        "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2",
+    ]
+    
+    # 尝试主模型和备用模型
+    models_to_try = [HF_API_URL] + backup_models
+    
+    for model_url in models_to_try:
+        payload = {
+            "inputs": prompt,
+            "parameters": {
+                "max_new_tokens": 512,
+                "temperature": 0.7,
+                "top_p": 0.9,
+                "do_sample": True,
+                "return_full_text": False,
+            },
+            "options": {
+                "wait_for_model": True
+            }
         }
-    }
-    
-    try:
-        response = requests.post(HF_API_URL, headers=headers, json=payload, timeout=60)
-        response.raise_for_status()
         
-        result = response.json()
-        
-        if isinstance(result, list) and len(result) > 0:
-            generated_text = result[0].get("generated_text", "")
-            # 清理回答
-            generated_text = generated_text.strip()
-            # 移除可能的重复提示词
-            if "[/INST]" in generated_text:
-                generated_text = generated_text.split("[/INST]")[-1].strip()
-            return generated_text
-        else:
-            return "申し訳ございませんが、回答を生成できませんでした。もう一度お試しください。"
+        try:
+            response = requests.post(model_url, headers=headers, json=payload, timeout=60)
+            
+            # 如果成功，返回结果
+            if response.status_code == 200:
+                result = response.json()
+                
+                if isinstance(result, list) and len(result) > 0:
+                    generated_text = result[0].get("generated_text", "")
+                    # 清理回答
+                    generated_text = generated_text.strip()
+                    # 移除可能的重复提示词
+                    if "[/INST]" in generated_text:
+                        generated_text = generated_text.split("[/INST]")[-1].strip()
+                    if "<s>" in generated_text:
+                        generated_text = generated_text.split("<s>")[-1].strip()
+                    return generated_text
+                elif isinstance(result, dict) and "generated_text" in result:
+                    generated_text = result["generated_text"].strip()
+                    if "[/INST]" in generated_text:
+                        generated_text = generated_text.split("[/INST]")[-1].strip()
+                    return generated_text
+                else:
+                    continue  # 尝试下一个模型
+            
+            # 如果是503（模型正在加载），等待并重试
+            elif response.status_code == 503:
+                error_info = response.json() if response.content else {}
+                estimated_time = error_info.get("estimated_time", 30)
+                return f"モデルを読み込み中です。約{estimated_time}秒お待ちください。しばらくしてから再度お試しください。"
+            
+            # 如果是410（Gone），尝试下一个模型
+            elif response.status_code == 410:
+                continue  # 尝试下一个模型
+            
+            # 其他错误，尝试下一个模型
+            else:
+                continue
+                
+        except requests.exceptions.Timeout:
+            continue  # 超时，尝试下一个模型
+        except requests.exceptions.RequestException:
+            continue  # 请求错误，尝试下一个模型
+        except Exception:
+            continue  # 其他错误，尝试下一个模型
     
-    except requests.exceptions.RequestException as e:
-        return f"APIリクエストエラー: {str(e)}。もう一度お試しください。"
-    except Exception as e:
-        return f"エラーが発生しました: {str(e)}"
+    # 所有模型都失败，返回友好的错误信息
+    return "申し訳ございませんが、現在APIに接続できません。しばらく時間をおいてから再度お試しください。または、Spaceの設定で別のモデルを指定してください。"
 
 # 创建Gradio界面
 def create_interface():

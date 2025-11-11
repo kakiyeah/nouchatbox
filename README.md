@@ -61,11 +61,7 @@ The chatbot generates responses with the following characteristics:
 - Formal honorifics like "推奨いたします", "必要となります"
 - Excessive use of numbers and percentages
 
-## Customization
-
-You can customize the response style by editing the `SYSTEM_PROMPT` variable in `app.py`.
-
-## Technical Details
+## :pouting_cat: Others
 
 - Built with Gradio for the user interface
 - Uses Hugging Face Inference API for model inference

@@ -1,3 +1,14 @@
+---
+title: 農業相談チャットボット
+emoji: 🌾
+colorFrom: green
+colorTo: yellow
+sdk: gradio
+sdk_version: "4.0.0"
+app_file: app.py
+pinned: false
+---
+
 # 🌾 農業相談チャットボット
 
 農家さん向けの親しみやすく分かりやすい農業相談チャットボットです。DPO（Direct Preference Optimization）データセットに基づいて設計された、農家さんが理解しやすい回答スタイルを実現しています。

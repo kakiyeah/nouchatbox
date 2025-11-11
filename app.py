@@ -1,62 +1,16 @@
+"""
+Hugging Face Inference APIを使用する軽量版
+このバージョンはモデルをローカルにダウンロードせず、Hugging FaceのInference APIを使用します
+"""
 import gradio as gr
-import json
 import os
-from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
-import torch
+import requests
 
-# 加载模型和tokenizer
-MODEL_NAME = os.getenv("MODEL_NAME", "elyza/ELYZA-japanese-Llama-2-7b-instruct")
-device = "cuda" if torch.cuda.is_available() else "cpu"
+# Hugging Face Inference APIの設定
+HF_API_URL = os.getenv("HF_API_URL", "https://api-inference.huggingface.co/models/elyza/ELYZA-japanese-Llama-2-7b-instruct")
+HF_API_TOKEN = os.getenv("HF_API_TOKEN", "")
 
-# 初始化模型和tokenizer
-tokenizer = None
-model = None
-pipe = None
-
-def load_model():
-    """加载模型"""
-    global tokenizer, model, pipe
-    
-    if tokenizer is not None and model is not None:
-        return
-    
-    try:
-        print(f"正在加载模型: {MODEL_NAME}")
-        tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-        
-        # 尝试使用pipeline（更简单）
-        try:
-            pipe = pipeline(
-                "text-generation",
-                model=MODEL_NAME,
-                tokenizer=MODEL_NAME,
-                device=0 if device == "cuda" else -1,
-                torch_dtype=torch.float16 if device == "cuda" else torch.float32,
-            )
-            print("使用pipeline加载模型成功")
-        except:
-            # 如果pipeline失败，使用传统方法
-            model = AutoModelForCausalLM.from_pretrained(
-                MODEL_NAME,
-                torch_dtype=torch.float16 if device == "cuda" else torch.float32,
-                device_map="auto" if device == "cuda" else None,
-                low_cpu_mem_usage=True,
-            )
-            if device == "cpu":
-                model = model.to(device)
-            print("使用传统方法加载模型成功")
-            
-    except Exception as e:
-        print(f"模型加载失败: {e}")
-        print("将使用模拟模式（仅用于测试）")
-        tokenizer = None
-        model = None
-        pipe = None
-
-# 在启动时加载模型
-load_model()
-
-# 优化的System Prompt - 基于JSON数据中的chosen回答风格
+# 优化的System Prompt
 SYSTEM_PROMPT = """あなたは農業推進事業者です。農家さんの質問や懸念に対して、共感的で具体的な回答をしてください。
 
 回答のスタイル：
@@ -79,79 +33,66 @@ SYSTEM_PROMPT = """あなたは農業推進事業者です。農家さんの質�
 - 「一緒にやってみようよ」「相談しようね」
 - 「大丈夫だよ」「安心して」などの安心感を与える言葉"""
 
-def format_prompt(user_message):
+def format_prompt(user_message, history=None):
     """格式化提示词"""
+    conversation = ""
+    if history:
+        for user_msg, assistant_msg in history:
+            if assistant_msg:
+                conversation += f"ユーザー: {user_msg}\nアシスタント: {assistant_msg}\n\n"
+    
+    full_message = conversation + f"ユーザー: {user_message}\nアシスタント: "
+    
     prompt = f"""<s>[INST] <<SYS>>
 {SYSTEM_PROMPT}
 <</SYS>>
 
-{user_message} [/INST]"""
+{full_message} [/INST]"""
     return prompt
 
 def generate_response(message, history):
-    """生成回答"""
-    # 确保模型已加载
-    if tokenizer is None:
-        load_model()
+    """使用Hugging Face Inference API生成回答"""
+    prompt = format_prompt(message, history)
     
-    if model is None and pipe is None and tokenizer is None:
-        # 模拟模式 - 返回示例回答（基于JSON数据中的风格）
-        return "そうだよね、その心配はよく分かるよ。実際にやってみると、最初は不安かもしれないけど、段階的に進めていけば大丈夫だと思うんだ。例えば、一部の田んぼでまず試してみて、効果を自分の目で確かめてから広げるっていう方法もあるよ。一緒に相談しながら進めていこうね。"
+    headers = {}
+    if HF_API_TOKEN:
+        headers["Authorization"] = f"Bearer {HF_API_TOKEN}"
     
-    # 构建完整的对话历史
-    conversation = ""
-    if history:
-        for user_msg, assistant_msg in history:
-            conversation += f"ユーザー: {user_msg}\nアシスタント: {assistant_msg}\n\n"
-    
-    full_message = conversation + f"ユーザー: {message}\nアシスタント: "
-    
-    # 格式化提示词
-    prompt = format_prompt(full_message)
+    payload = {
+        "inputs": prompt,
+        "parameters": {
+            "max_new_tokens": 512,
+            "temperature": 0.7,
+            "top_p": 0.9,
+            "do_sample": True,
+            "return_full_text": False,
+        },
+        "options": {
+            "wait_for_model": True
+        }
+    }
     
     try:
-        # 使用pipeline（如果可用）
-        if pipe is not None:
-            outputs = pipe(
-                prompt,
-                max_new_tokens=512,
-                temperature=0.7,
-                top_p=0.9,
-                do_sample=True,
-                return_full_text=False,
-            )
-            response = outputs[0]["generated_text"].strip()
-            return response
+        response = requests.post(HF_API_URL, headers=headers, json=payload, timeout=60)
+        response.raise_for_status()
         
-        # 使用传统方法
-        elif model is not None and tokenizer is not None:
-            # 编码输入
-            inputs = tokenizer.encode(prompt, return_tensors="pt")
-            if device == "cuda":
-                inputs = inputs.to(device)
-            
-            # 生成回答
-            with torch.no_grad():
-                outputs = model.generate(
-                    inputs,
-                    max_new_tokens=512,
-                    temperature=0.7,
-                    top_p=0.9,
-                    do_sample=True,
-                    pad_token_id=tokenizer.eos_token_id if tokenizer.eos_token_id is not None else tokenizer.pad_token_id,
-                    eos_token_id=tokenizer.eos_token_id if tokenizer.eos_token_id is not None else tokenizer.pad_token_id,
-                )
-            
-            # 解码输出
-            response = tokenizer.decode(outputs[0][inputs.shape[1]:], skip_special_tokens=True)
-            response = response.strip()
-            return response
+        result = response.json()
         
+        if isinstance(result, list) and len(result) > 0:
+            generated_text = result[0].get("generated_text", "")
+            # 清理回答
+            generated_text = generated_text.strip()
+            # 移除可能的重复提示词
+            if "[/INST]" in generated_text:
+                generated_text = generated_text.split("[/INST]")[-1].strip()
+            return generated_text
         else:
-            return "モデルの読み込みに失敗しました。Hugging Face Spaceの設定を確認してください。"
+            return "申し訳ございませんが、回答を生成できませんでした。もう一度お試しください。"
     
+    except requests.exceptions.RequestException as e:
+        return f"APIリクエストエラー: {str(e)}。もう一度お試しください。"
     except Exception as e:
-        return f"エラーが発生しました: {str(e)}。もう一度お試しください。"
+        return f"エラーが発生しました: {str(e)}"
 
 # 创建Gradio界面
 def create_interface():
@@ -161,6 +102,8 @@ def create_interface():
         
         農家さんの質問や懸念に対して、親しみやすく分かりやすい回答をします。
         農業に関する質問を気軽にどうぞ！
+        
+        **注意**: このバージョンはHugging Face Inference APIを使用しています。
         """)
         
         chatbot = gr.Chatbot(

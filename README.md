@@ -1,3 +1,7 @@
+Use it
+
+https://huggingface.co/spaces/ryusenyeah/nouchatbox
+
 ---
 title: Agriculture Consultation Chatbot
 emoji: 🌾
@@ -11,7 +15,7 @@ pinned: false
 
 # 🌾 Agriculture Consultation Chatbot
 
-A friendly and easy-to-understand agricultural consultation chatbot designed for farmers. This chatbot uses prompt engineering to generate responses in a farmer-friendly style, based on DPO (Direct Preference Optimization) dataset principles.
+A friendly and easy-to-understand agricultural consultation chatbot designed for farmers. This chatbot uses prompt engineering to generate responses in a farmer-friendly style, based on DPO dataset principles.
 
 ## Features
 
@@ -29,14 +33,6 @@ This chatbot uses prompt engineering to guide language models to generate respon
 - Provide concrete examples (e.g., "去年参加した○○さん", "実際にやってみると")
 - Avoid technical terms and statistical data
 - Offer flexible solutions without being pushy
-
-## Usage
-
-### Using on Hugging Face Space
-
-1. Visit the [Hugging Face Space](https://huggingface.co/spaces/ryusenyeah/nouchatbox)
-2. Start chatting with the bot
-3. Ask questions about agriculture in Japanese
 
 ### Running Locally
 

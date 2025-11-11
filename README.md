@@ -2,17 +2,8 @@ Use it
 
 https://huggingface.co/spaces/ryusenyeah/nouchatbox
 
----
-title: Agriculture Consultation Chatbot
-emoji: 🌾
-colorFrom: green
-colorTo: yellow
-sdk: gradio
-sdk_version: "4.0.0"
-app_file: app.py
-pinned: false
----
-
+| ![Image 1](https://github.com/user-attachments/assets/abee7a6d-70f3-43e5-b610-64e30b1440dc) | ![Image 2](https://github.com/user-attachments/assets/86612f8f-6aac-4640-8e76-25cf6d635959) |
+|:--------------------------------------------------------------------------------------------:|:--------------------------------------------------------------------------------------------:|
 # 🌾 Agriculture Consultation Chatbot
 
 A friendly and easy-to-understand agricultural consultation chatbot designed for farmers. This chatbot uses prompt engineering to generate responses in a farmer-friendly style, based on DPO dataset principles.
@@ -73,30 +64,6 @@ The chatbot generates responses with the following characteristics:
 ## Customization
 
 You can customize the response style by editing the `SYSTEM_PROMPT` variable in `app.py`.
-
-## API Configuration
-
-To improve API reliability and access more models:
-
-1. Create a Hugging Face Access Token at https://huggingface.co/settings/tokens
-2. Add it as an environment variable `HF_API_TOKEN` in your Space settings
-3. See `API_SETUP.md` for detailed instructions
-
-## Architecture
-
-- **Primary Method**: Hugging Face Inference API (lightweight, fast startup)
-- **Fallback System**: If all APIs fail, uses keyword-based responses that match the desired style
-- **Multi-Model Support**: Automatically tries multiple models for better reliability
-
-## License
-
-This project follows the license of the original DPO dataset.
-
-## Important Notes
-
-- This chatbot is designed as an auxiliary tool for agricultural consultation
-- For important decisions, always consult with experts or agricultural cooperatives (JA)
-- Treat model responses as reference information and make careful judgments in actual agricultural work
 
 ## Technical Details
 
